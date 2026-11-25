@@ -2876,8 +2876,16 @@ Select TLS protocol version 1\&.
 Select TLS protocol version 1\&.1\&.
 .IP "\f(CWTLS1\&.2\fP"
 Select TLS protocol version 1\&.2\&.
+.IP "\f(CWTLS1\&.3\fP"
+Select TLS protocol version 1\&.3\&.
 When this option is not provided OpenSSL negotiates the mothod with its
 peer\&.
+.IP "\fB\f(CWmin\-proto\-version=<version>\fP\fP"
+Require the given SSL/TLS version or a newer version\&. Supported names
+include \f(CWTLS1\&.2\fP and \f(CWTLS1\&.3\fP; \f(CWmin\-version\fP is an alias\&.
+.IP "\fB\f(CWmax\-proto\-version=<version>\fP\fP"
+Set the maximum accepted SSL/TLS version\&. \f(CWmax\-version\fP is an alias\&.
+Setting both options to \f(CWTLS1\&.3\fP forces a TLS 1\&.3 tunnel\&.
 .IP "\fB\f(CWverify=<bool>\fP\fP"
 Controls check of the peer\(cq\&s certificate\&. Default is 1 (true)\&. Disabling
 verify might open your socket for everyone, making the encryption useless!

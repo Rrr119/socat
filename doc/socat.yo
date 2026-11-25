@@ -2642,9 +2642,22 @@ label(OPTION_OPENSSL_METHOD)dit(bf(tt(method=<ssl-method>)))
    dit(tt(TLS1)) Select TLS protocol version 1.
    dit(tt(TLS1.1)) Select TLS protocol version 1.1.
    dit(tt(TLS1.2)) Select TLS protocol version 1.2.
+   dit(tt(TLS1.3)) Select TLS protocol version 1.3.
    When this option is not provided OpenSSL negotiates the mothod with its
    peer.
    enddit()
+label(OPTION_OPENSSL_MIN_PROTO_VERSION)dit(bf(tt(min-proto-version=<version>)))
+   Requires the peer to use the given SSL/TLS protocol version or a newer
+   version. Supported version names include tt(TLS1), tt(TLS1.0),
+   tt(TLS1.1), tt(TLS1.2), and tt(TLS1.3) (not case sensitive). The alias
+   tt(min-version) and the prefixed name tt(openssl-min-proto-version) are
+   accepted. Use tt(TLS1.3) to require TLS 1.3.
+label(OPTION_OPENSSL_MAX_PROTO_VERSION)dit(bf(tt(max-proto-version=<version>)))
+   Restricts the maximum SSL/TLS protocol version that may be negotiated.
+   It accepts the same version names as
+   link(min-proto-version)(OPTION_OPENSSL_MIN_PROTO_VERSION); tt(max-version)
+   and tt(openssl-max-proto-version) are aliases. Setting both options to
+   tt(TLS1.3) forces a TLS 1.3 tunnel.
 label(OPTION_OPENSSL_VERIFY)dit(bf(tt(verify=<bool>)))
    Controls check of the peer's certificate. Default is 1 (true). Disabling
    verify might open your socket for everyone, making the encryption useless!

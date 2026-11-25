@@ -1,0 +1,17 @@
+{
+  "root": "/home/dev/feedback/uid36819",
+  "B": "/home/dev/feedback/uid36819",
+  "sha": "7e92e21132e8527825916d258b201008e7fa2bf5",
+  "wslDistro": "Ubuntu-26.04",
+  "source": {
+    "owner": "3ndG4me",
+    "repo": "socat",
+    "sha": "7e92e21132e8527825916d258b201008e7fa2bf5"
+  },
+  "fork": {
+    "owner": "Rrr119",
+    "repo": "socat",
+    "cloneUrl": "https://github.com/Rrr119/socat.git"
+  },
+  "at": "2026-11-25T00:05:27.261Z"
+}

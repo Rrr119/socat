@@ -104,6 +104,8 @@ const struct optdesc opt_openssl_cipherlist = { "openssl-cipherlist", "ciphers",
 #if WITH_OPENSSL_METHOD
 const struct optdesc opt_openssl_method     = { "openssl-method",     "method",  OPT_OPENSSL_METHOD,     GROUP_OPENSSL, PH_SPEC, TYPE_STRING, OFUNC_SPEC };
 #endif
+const struct optdesc opt_openssl_max_proto_version = { "openssl-max-proto-version", "max-proto-version", OPT_OPENSSL_MAX_PROTO_VERSION, GROUP_OPENSSL, PH_SPEC, TYPE_STRING, OFUNC_SPEC };
+const struct optdesc opt_openssl_min_proto_version = { "openssl-min-proto-version", "min-proto-version", OPT_OPENSSL_MIN_PROTO_VERSION, GROUP_OPENSSL, PH_SPEC, TYPE_STRING, OFUNC_SPEC };
 const struct optdesc opt_openssl_verify     = { "openssl-verify",     "verify",  OPT_OPENSSL_VERIFY,     GROUP_OPENSSL, PH_SPEC, TYPE_BOOL,   OFUNC_SPEC };
 const struct optdesc opt_openssl_certificate = { "openssl-certificate", "cert",  OPT_OPENSSL_CERTIFICATE, GROUP_OPENSSL, PH_SPEC, TYPE_FILENAME, OFUNC_SPEC };
 const struct optdesc opt_openssl_key         = { "openssl-key",         "key",   OPT_OPENSSL_KEY,         GROUP_OPENSSL, PH_SPEC, TYPE_FILENAME, OFUNC_SPEC };
@@ -147,6 +149,7 @@ int xio_reset_fips_mode(void) {
 #endif
 
 static void openssl_conn_loginfo(SSL *ssl) {
+   Notice1("SSL proto version used: %s", SSL_get_version(ssl));
    Notice1("SSL connection using %s", SSL_get_cipher(ssl));
 
 #if OPENSSL_VERSION_NUMBER >= 0x00908000L && !defined(OPENSSL_NO_COMP)
@@ -705,6 +708,72 @@ static int openssl_setup_compression(SSL_CTX *ctx, char *method)
 }
 #endif
 
+static int openssl_parse_proto_version(const char *version) {
+#if defined(SSL3_VERSION)
+   if (!strcasecmp(version, "SSL3") || !strcasecmp(version, "SSLv3"))
+      return SSL3_VERSION;
+#endif
+#if defined(TLS1_VERSION)
+   if (!strcasecmp(version, "TLS1") || !strcasecmp(version, "TLS1.0") ||
+       !strcasecmp(version, "TLSv1") || !strcasecmp(version, "TLSv1.0"))
+      return TLS1_VERSION;
+#endif
+#if defined(TLS1_1_VERSION)
+   if (!strcasecmp(version, "TLS1.1") || !strcasecmp(version, "TLSv1.1"))
+      return TLS1_1_VERSION;
+#endif
+#if defined(TLS1_2_VERSION)
+   if (!strcasecmp(version, "TLS1.2") || !strcasecmp(version, "TLSv1.2"))
+      return TLS1_2_VERSION;
+#endif
+#if defined(TLS1_3_VERSION)
+   if (!strcasecmp(version, "TLS1.3") || !strcasecmp(version, "TLSv1.3"))
+      return TLS1_3_VERSION;
+#endif
+   Error1("unknown SSL/TLS protocol version \"%s\"", version);
+   return -1;
+}
+
+static int openssl_apply_proto_versions(SSL_CTX *ctx,
+					const char *min_version,
+					const char *max_version) {
+   int version;
+
+   if (min_version != NULL) {
+      version = openssl_parse_proto_version(min_version);
+      if (version < 0)
+	 return STAT_NORETRY;
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+      if (SSL_CTX_set_min_proto_version(ctx, version) != 1) {
+	 Error2("SSL_CTX_set_min_proto_version(\"%s\"->%d) failed",
+		min_version, version);
+	 return STAT_RETRYLATER;
+      }
+#else
+      Error("openssl-min-proto-version requires OpenSSL 1.1.0 or later");
+      return STAT_NORETRY;
+#endif
+   }
+
+   if (max_version != NULL) {
+      version = openssl_parse_proto_version(max_version);
+      if (version < 0)
+	 return STAT_NORETRY;
+#if OPENSSL_VERSION_NUMBER >= 0x10100000L
+      if (SSL_CTX_set_max_proto_version(ctx, version) != 1) {
+	 Error2("SSL_CTX_set_max_proto_version(\"%s\"->%d) failed",
+		max_version, version);
+	 return STAT_RETRYLATER;
+      }
+#else
+      Error("openssl-max-proto-version requires OpenSSL 1.1.0 or later");
+      return STAT_NORETRY;
+#endif
+   }
+
+   return STAT_OK;
+}
+
 
 int
    _xioopen_openssl_prepare(struct opt *opts,
@@ -724,6 +793,8 @@ int
    char *opt_dhparam = NULL;	/* file name of DH params */
    char *opt_cafile = NULL;	/* certificate authority file */
    char *opt_capath = NULL;	/* certificate authority directory */
+   char *opt_minproto = NULL;	/* minimum SSL/TLS protocol version */
+   char *opt_maxproto = NULL;	/* maximum SSL/TLS protocol version */
    char *opt_egd = NULL;	/* entropy gathering daemon socket path */
 #if OPENSSL_VERSION_NUMBER >= 0x00908000L
    char *opt_compress = NULL;	/* compression method */
@@ -741,6 +812,8 @@ int
    retropt_bool(opts, OPT_OPENSSL_VERIFY, opt_ver);
    retropt_string(opts, OPT_OPENSSL_CAFILE, &opt_cafile);
    retropt_string(opts, OPT_OPENSSL_CAPATH, &opt_capath);
+   retropt_string(opts, OPT_OPENSSL_MIN_PROTO_VERSION, &opt_minproto);
+   retropt_string(opts, OPT_OPENSSL_MAX_PROTO_VERSION, &opt_maxproto);
    retropt_string(opts, OPT_OPENSSL_KEY, &opt_key);
    retropt_string(opts, OPT_OPENSSL_DHPARAM, &opt_dhparam);
    retropt_string(opts, OPT_OPENSSL_EGD, &opt_egd);
@@ -800,6 +873,15 @@ int
 	 } else if (!strcasecmp(me_str, "TLS1.2")) {
 	    method = sycTLSv1_2_client_method();
 #endif
+#if defined(TLS1_3_VERSION) && HAVE_TLS_client_method
+	 } else if (!strcasecmp(me_str, "TLS1.3") ||
+		    !strcasecmp(me_str, "TLSv1.3")) {
+	    method = TLS_client_method();
+	    if (opt_minproto == NULL)
+	       opt_minproto = (char *)"TLS1.3";
+	    if (opt_maxproto == NULL)
+	       opt_maxproto = (char *)"TLS1.3";
+#endif
 #if HAVE_DTLSv1_client_method
 	 } else if (!strcasecmp(me_str, "DTLS") || !strcasecmp(me_str, "DTLS1")) {
 	    method = sycDTLSv1_client_method();
@@ -853,6 +935,15 @@ int
 #if HAVE_TLSv1_2_server_method
 	 } else if (!strcasecmp(me_str, "TLS1.2")) {
 	    method = sycTLSv1_2_server_method();
+#endif
+#if defined(TLS1_3_VERSION) && HAVE_TLS_server_method
+	 } else if (!strcasecmp(me_str, "TLS1.3") ||
+		    !strcasecmp(me_str, "TLSv1.3")) {
+	    method = TLS_server_method();
+	    if (opt_minproto == NULL)
+	       opt_minproto = (char *)"TLS1.3";
+	    if (opt_maxproto == NULL)
+	       opt_maxproto = (char *)"TLS1.3";
 #endif
 #if HAVE_DTLSv1_server_method
 	 } else if (!strcasecmp(me_str, "DTLS") || !strcasecmp(me_str, "DTLS1")) {
@@ -919,6 +1010,10 @@ int
       /*ERR_clear_error;*/
       return STAT_RETRYLATER;
    }
+
+   result = openssl_apply_proto_versions(*ctx, opt_minproto, opt_maxproto);
+   if (result != STAT_OK)
+      return result;
 
    {
       static unsigned char dh2048_p[] = {

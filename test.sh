@@ -107,7 +107,7 @@ TESTCERT_ORGANIZATIONALUNITNAME="socat"
 TESTCERT_ORGANIZATIONNAME="dest-unreach"
 TESTCERT_SUBJECT="C = $TESTCERT_COUNTRYNAME, CN = $TESTCERT_COMMONNAME, O = $TESTCERT_ORGANIZATIONNAME, OU = $TESTCERT_ORGANIZATIONALUNITNAME, L = $TESTCERT_LOCALITYNAME"
 TESTCERT_ISSUER="C = $TESTCERT_COUNTRYNAME, CN = $TESTCERT_COMMONNAME, O = $TESTCERT_ORGANIZATIONNAME, OU = $TESTCERT_ORGANIZATIONALUNITNAME, L = $TESTCERT_LOCALITYNAME"
-RSABITS=1024
+RSABITS=2048
 cat >$TESTCERT_CONF <<EOF
 prompt=no
 
@@ -1806,8 +1806,8 @@ childpids () {
     OpenBSD) l="$(ps -aj   |grep "^........ ..... $(printf %5u $1)" |awk '{print($2);}')" ;;
     SunOS)   l="$(ps -fade |grep "^........ ..... $(printf %5u $1)" |awk '{print($2);}')" ;;
     DragonFly)l="$(ps -faje |grep "^[^ ][^ ]*[ ][ ]*..... $(printf %5u $1)" |awk '{print($2);}')" ;;
-    CYGWIN*)  l="$(ps -pafe |grep "^[^ ]*[ ][ ]*[^ ][^ ]*[ ][ ]*$1[ ]" |awk '{print($2)';})" ;;
-    *)       l="$(ps -fade |grep "^[^ ][^ ]*[ ][ ]*[0-9][0-9]*[ ][ ]*$(printf %5u $1) " |awk '{print($2)';})" ;;    esac
+    CYGWIN*)  l="$(ps -pafe |grep "^[^ ]*[ ][ ]*[^ ][^ ]*[ ][ ]*$1[ ]" |awk '{print($2);}')" ;;
+    *)       l="$(ps -fade |grep "^[^ ][^ ]*[ ][ ]*[0-9][0-9]*[ ][ ]*$(printf %5u $1) " |awk '{print($2);}')" ;;    esac
     if [ -z "$l" ]; then
 	return 1;
     fi
@@ -13092,6 +13092,36 @@ fi
 fi # no /dev/ptmx
 fi # NUMCOND
  ;;
+esac
+N=$((N+1))
+
+
+NAME=OPENSSL_TLS13_MTLS
+case "$TESTS" in
+*%$N%*|*%functions%*|*%openssl%*|*%tcp%*|*%tcp4%*|*%ip4%*|*%$NAME%*)
+TEST="$NAME: TLS 1.3, mutual certificate verification, and address compatibility"
+printf "test $F_n $TEST... " $N
+tls_test_script="$(cd "$(dirname "$0")" && pwd)/test-tls13-mtls.sh"
+tls_test_rc=0
+if [ ! -x "$tls_test_script" ]; then
+    tls_test_rc=1
+else
+    SOCAT="$SOCAT" "$tls_test_script" >"$td/test$N.tls13" 2>&1 || tls_test_rc=$?
+fi
+if [ "$tls_test_rc" -eq 0 ]; then
+    $PRINTF "$OK\n"
+    numOK=$((numOK+1))
+elif [ "$tls_test_rc" -eq 77 ]; then
+    $PRINTF "${YELLOW}could not be performed${NORMAL}\n"
+    cat "$td/test$N.tls13"
+    numCANT=$((numCANT+1))
+else
+    $PRINTF "$FAILED\n"
+    cat "$td/test$N.tls13"
+    numFAIL=$((numFAIL+1))
+    listFAIL="$listFAIL $N"
+fi
+;;
 esac
 N=$((N+1))
 
